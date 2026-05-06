@@ -3,6 +3,7 @@ import requests
 import json
 import html
 import re
+import pandas as pd
 
 LOGO_URL = "https://proyectoteresia.org/wp-content/uploads/2024/05/Teresia-X-sin-fondo.png"
 
@@ -18,6 +19,17 @@ def highlight_terms(text, terms):
             highlighted_text
         )
     return highlighted_text
+
+def cargar_datos_tributarios():
+    if 'datos_tributarios' not in st.session_state:
+        try:
+            df = pd.read_excel("terminologia.xlsx")
+            df = df.sort_values(by='apariciones', ascending=False).reset_index(drop=True)
+            st.session_state['datos_tributarios'] = df
+        except Exception as e:
+            st.session_state['datos_tributarios'] = None
+            st.error(f"Error al cargar el archivo: {e}")
+    return st.session_state['datos_tributarios']
 
 st.set_page_config(
     page_title="TeresIA - Extracción de Términos",
@@ -99,7 +111,7 @@ with st.sidebar:
     </div>
     """.format(logo=LOGO_URL), unsafe_allow_html=True)
     st.markdown("---")
-    menu = st.radio("Menú", ["Inicio", "Extracción de Términos"])
+    menu = st.radio("Menú", ["Inicio", "Extracción de Términos", "Análisis Tributario"])
 
 if menu == "Inicio":
     st.markdown("""
@@ -215,6 +227,67 @@ elif menu == "Extracción de Términos":
                     ⚠️ Error de conexión: {}
                 </div>
                 """.format(str(e)), unsafe_allow_html=True)
+
+elif menu == "Análisis Tributario":
+    st.title("Análisis Tributario")
+
+    df = cargar_datos_tributarios()
+
+    if df is not None and not df.empty:
+        col_lista, col_contextos = st.columns([3, 2])
+
+        with col_lista:
+            st.markdown(f"**Total de términos: {len(df)}**")
+            st.markdown("---")
+
+            df_display = df[['término', 'apariciones']].copy()
+            df_display.columns = ['Término', 'Frecuencia']
+
+            for idx, row in df_display.iterrows():
+                termino = row['Término']
+                frecuencia = row['Frecuencia']
+
+                key = f"btn_{idx}"
+                
+                col_term, col_freq = st.columns([3, 1])
+                
+                with col_term:
+                    if st.button(f"📖 {termino}", key=key, use_container_width=True):
+                        st.session_state['termino_seleccionado'] = termino
+                        st.session_state['mostrar_contextos'] = True
+
+                with col_freq:
+                    st.markdown(f"<div style='text-align: right; padding-top: 10px; font-size: 1.2em; color: #00B4D8;'>{frecuencia}</div>", unsafe_allow_html=True)
+
+        with col_contextos:
+            if st.session_state.get('mostrar_contextos'):
+                termino_sel = st.session_state.get('termino_seleccionado')
+                if termino_sel:
+                    row_data = df[df['término'] == termino_sel].iloc[0]
+                    
+                    st.markdown(f"### {termino_sel}")
+                    st.markdown(f"**Frecuencia:** {row_data['apariciones']}")
+                    st.markdown("---")
+
+                    context_cols = ['contexto 1', 'contexto 2', 'contexto 3', 'contexto 4', 'contexto 5']
+                    contexto_num = 1
+                    
+                    for col in context_cols:
+                        contexto = row_data.get(col)
+                        if pd.notna(contexto) and str(contexto).strip():
+                            st.markdown(f"**Contexto {contexto_num}:**")
+                            st.markdown(f"""
+                            <div style="background-color: #1B263B; padding: 15px; border-radius: 8px; border-left: 4px solid #00B4D8; margin-bottom: 15px; line-height: 1.6;">
+                                {contexto}
+                            </div>
+                            """, unsafe_allow_html=True)
+                            contexto_num += 1
+            else:
+                st.markdown("""
+                <div style="text-align: center; padding: 40px; color: #778DA9;">
+                    <p style="font-size: 1.2em;"> Selecciona un término para ver sus contextos</p>
+                </div>
+                """, unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("---")
